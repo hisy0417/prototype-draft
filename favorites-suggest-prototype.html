@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>즐겨찾기 제안 프로토타입</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #e8eef5;
+    --card: #ffffff;
+    --card-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    --text-primary: #1a1a2e;
+    --text-secondary: #6b7280;
+    --accent: #1259c3;
+    --accent-light: #e8f0fd;
+    --ai-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 50%, #43e97b 100%);
+    --radius: 18px;
+    --radius-sm: 12px;
+  }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0;
+  }
+
+  /* ── 폰 프레임 ── */
+  .phone {
+    width: 375px;
+    min-height: 812px;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    border-radius: 40px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.25);
+    margin: 40px auto;
+  }
+
+  /* ── 홈 화면 ── */
+  .home-screen {
+    width: 100%;
+    min-height: 812px;
+    background: linear-gradient(160deg, #dce8f5 0%, #e8f0e8 40%, #f0e8f5 80%, #e8f5f0 100%);
+    padding: 60px 20px 100px;
+    position: relative;
+    transition: filter 0.3s ease;
+  }
+
+  .home-screen.dimmed {
+    filter: brightness(0.6) blur(1px);
+    pointer-events: none;
+  }
+
+  /* 상단 헤더 */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .header-left { display: flex; align-items: center; gap: 8px; }
+  .header-title { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+  .header-icons { display: flex; gap: 16px; }
+  .header-icon { font-size: 20px; color: var(--text-secondary); }
+
+  /* AI 제안 배너 */
+  .ai-banner {
+    background: white;
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 1.5px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .ai-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    padding: 1.5px;
+    background: linear-gradient(90deg, #4facfe, #43e97b, #4facfe);
+    background-size: 200% 100%;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: borderFlow 3s linear infinite;
+    opacity: 0.7;
+  }
+
+  @keyframes borderFlow {
+    0% { background-position: 0% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .ai-banner-left { display: flex; align-items: center; gap: 10px; }
+  .ai-sparkle {
+    width: 32px; height: 32px;
+    background: var(--ai-gradient);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .ai-banner-text { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .ai-banner-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .ai-banner-close {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .ai-banner:active { transform: scale(0.98); }
+
+  /* 즐겨찾기 섹션 */
+  .section-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    letter-spacing: 0.3px;
+  }
+
+  /* 카드 그리드 */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    padding: 14px 12px;
+    box-shadow: var(--card-shadow);
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* 교체 애니메이션 */
+  .card.replacing {
+    animation: cardReplace 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .card.adding {
+    animation: cardAdd 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .card.removing {
+    animation: cardRemove 0.3s ease-in forwards;
+  }
+
+  @keyframes cardReplace {
+    0% { transform: scale(1); background: white; }
+    30% { transform: scale(0.9); background: #f0f8ff; }
+    60% { transform: scale(1.05); background: #e8f4ff; }
+    100% { transform: scale(1); background: white; }
+  }
+
+  @keyframes cardAdd {
+    0% { opacity: 0; transform: scale(0.7) translateY(10px); }
+    60% { opacity: 1; transform: scale(1.05) translateY(-3px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes cardRemove {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.8); }
+  }
+
+  .card-icon { font-size: 20px; margin-bottom: 6px; }
+  .card-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .card-value { font-size: 11px; color: var(--text-secondary); }
+
+  /* wide 카드 */
+  .card-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .card-wide {
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-wide .card-name { font-size: 13px; font-weight: 600; }
+
+  /* 바텀 네비 */
+  .bottom-nav {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 10px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 16px; border-radius: 14px;
+    font-size: 10px; color: var(--text-secondary); font-weight: 500;
+  }
+  .nav-item.active { background: rgba(0,0,0,0.08); color: var(--text-primary); }
+  .nav-icon { font-size: 20px; }
+
+
+  /* ══════════════════════════════
+     AI 제안 오버레이 시트
+  ══════════════════════════════ */
+  .suggestion-sheet {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: white;
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
+    z-index: 100;
+    transform: translateY(100%);
+    transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 85%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .suggestion-sheet.open {
+    transform: translateY(0);
+  }
+
+  /* 시트 핸들 */
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    margin: 12px auto 0;
+    flex-shrink: 0;
+  }
+
+  /* 시트 헤더 */
+  .sheet-header {
+    padding: 16px 20px 12px;
+    flex-shrink: 0;
+  }
+  .sheet-header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .sheet-title-row { display: flex; align-items: center; gap: 8px; }
+  .sheet-ai-badge {
+    background: var(--ai-gradient);
+    border-radius: 8px;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .sheet-title { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+  .sheet-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .sheet-close {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: #f5f5f5;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: var(--text-secondary);
+    cursor: pointer; border: none;
+    flex-shrink: 0;
+  }
+
+  /* 변경 라벨 */
+  .change-summary {
+    margin: 0 20px 12px;
+    background: #f0f8f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    flex-shrink: 0;
+  }
+  .change-summary-title { font-size: 11px; font-weight: 600; color: #2d7d46; margin-bottom: 6px; }
+  .change-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .change-tag {
+    font-size: 11px; padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .tag-add { background: #dcfce7; color: #16a34a; }
+  .tag-remove { background: #fee2e2; color: #dc2626; }
+
+  /* 미리보기 카드 영역 */
+  .sheet-preview {
+    padding: 0 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .preview-label {
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+
+  /* 미리보기 홈 미니어처 */
+  .preview-home {
+    background: linear-gradient(160deg, #dce8f5 0%, #e8f0e8 40%, #f0e8f5 80%);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .preview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .preview-card {
+    background: white;
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .preview-card.new-card {
+    border: 1.5px solid #43e97b;
+    background: #f0fff4;
+    animation: pulseNew 1.5s ease infinite;
+  }
+  @keyframes pulseNew {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(67, 233, 123, 0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(67, 233, 123, 0); }
+  }
+
+  .preview-card-icon { font-size: 14px; margin-bottom: 3px; }
+  .preview-card-name { font-size: 9px; font-weight: 600; color: var(--text-primary); }
+  .preview-card-val { font-size: 8px; color: var(--text-secondary); }
+
+  .preview-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .preview-wide {
+    background: white;
+    border-radius: 8px;
+    padding: 8px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .preview-wide.new-card {
+    border: 1.5px solid #43e97b;
+    background: #f0fff4;
+    animation: pulseNew 1.5s ease infinite;
+  }
+  .preview-wide-name { font-size: 10px; font-weight: 600; }
+  .preview-wide-icon { font-size: 14px; }
+
+  /* 저장 버튼 */
+  .sheet-footer {
+    padding: 16px 20px 32px;
+    flex-shrink: 0;
+    display: flex; gap: 10px;
+  }
+
+  .btn-cancel {
+    flex: 1;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    background: #f5f5f5;
+    font-size: 15px; font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: background 0.2s;
+  }
+  .btn-cancel:active { background: #e8e8e8; }
+
+  .btn-save {
+    flex: 2;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #1a6ef5, #0d47a1);
+    color: white;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 4px 16px rgba(26, 110, 245, 0.4);
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-save:active { transform: scale(0.97); }
+  .btn-save::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transform: translateX(-100%);
+  }
+  .btn-save.shimmer::after {
+    animation: shimmer 0.6s ease forwards;
+  }
+  @keyframes shimmer {
+    to { transform: translateX(100%); }
+  }
+
+  /* dim 오버레이 */
+  .dim {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    z-index: 50;
+    pointer-events: none;
+    transition: background 0.3s ease;
+    border-radius: 40px;
+  }
+  .dim.active {
+    background: rgba(0,0,0,0.45);
+    pointer-events: auto;
+  }
+
+  /* 저장 완료 토스트 */
+  .toast {
+    position: absolute;
+    top: 70px; left: 20px; right: 20px;
+    background: rgba(30,30,30,0.92);
+    color: white;
+    padding: 14px 18px;
+    border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+    display: flex; align-items: center; gap: 10px;
+    z-index: 200;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .toast-icon { font-size: 16px; }
+
+  /* AI 로딩 */
+  .ai-loading {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, #dce8f5 0%, #e8f0e8 40%, #f0e8f5 100%);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    border-radius: 40px;
+  }
+  .ai-loading.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sparkle-anim {
+    font-size: 36px;
+    margin-bottom: 16px;
+    animation: sparkleFloat 1.5s ease-in-out infinite;
+  }
+  @keyframes sparkleFloat {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.15) rotate(10deg); }
+  }
+  .loading-text {
+    font-size: 15px; color: #5a7a9a; font-weight: 500;
+    animation: textPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes textPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- AI 로딩 화면 -->
+  <div class="ai-loading" id="aiLoading">
+    <div class="sparkle-anim">✨</div>
+    <div class="loading-text">사용 패턴을 분석하는 중...</div>
+  </div>
+
+  <!-- Dim 레이어 -->
+  <div class="dim" id="dim" onclick="closeSheet()"></div>
+
+  <!-- 홈 화면 -->
+  <div class="home-screen" id="homeScreen">
+
+    <!-- 헤더 -->
+    <div class="header">
+      <div class="header-left">
+        <span style="font-size:18px">☰</span>
+        <span class="header-title">우리집 ▾</span>
+      </div>
+      <div class="header-icons">
+        <span class="header-icon">⬡</span>
+        <span class="header-icon">＋</span>
+        <span class="header-icon">⋮</span>
+      </div>
+    </div>
+
+    <!-- AI 제안 배너 -->
+    <div class="ai-banner" id="aiBanner" onclick="startSuggestion()">
+      <div class="ai-banner-left">
+        <div class="ai-sparkle">✨</div>
+        <div>
+          <div class="ai-banner-text">즐겨찾기 편집 제안</div>
+          <div class="ai-banner-sub">사용 패턴 기반으로 구성을 바꿔드릴게요</div>
+        </div>
+      </div>
+      <div class="ai-banner-close" onclick="event.stopPropagation(); closeBanner()">✕</div>
+    </div>
+
+    <!-- 즐겨찾기 -->
+    <div class="section-title">즐겨찾기</div>
+
+    <div class="card-grid" id="cardGrid">
+      <div class="card" id="c1">
+        <div class="card-icon">🌡</div>
+        <div class="card-name">온도</div>
+        <div class="card-value">24°C</div>
+      </div>
+      <div class="card" id="c2">
+        <div class="card-icon">💧</div>
+        <div class="card-name">습도</div>
+        <div class="card-value">55%</div>
+      </div>
+      <div class="card" id="c3">
+        <div class="card-icon">🔗</div>
+        <div class="card-name">허브</div>
+        <div class="card-value">2개</div>
+      </div>
+      <div class="card" id="c4">
+        <div class="card-icon">❄️</div>
+        <div class="card-name">에어컨</div>
+        <div class="card-value">2개 켜짐</div>
+      </div>
+      <div class="card" id="c5">
+        <div class="card-icon">🚩</div>
+        <div class="card-name">커튼</div>
+        <div class="card-value">1개 열림</div>
+      </div>
+      <div class="card" id="c6">
+        <div class="card-icon">💡</div>
+        <div class="card-name">조명</div>
+        <div class="card-value">2개 켜짐</div>
+      </div>
+    </div>
+
+    <div class="card-row">
+      <div class="card-wide" id="c7">
+        <div>
+          <div class="card-name">방송하기</div>
+        </div>
+        <span style="font-size:22px">🎙</span>
+      </div>
+      <div class="card-wide" id="c8">
+        <div>
+          <div class="card-name">에너지</div>
+          <div class="card-value" style="font-size:13px; font-weight:700; color:#1a1a2e; margin-top:2px">14,567원</div>
+        </div>
+        <span style="font-size:22px">⚡</span>
+      </div>
+    </div>
+
+    <div class="card-row">
+      <div class="card-wide" id="c9">
+        <div>
+          <div class="card-name">안방 TV</div>
+          <div class="card-value">켜짐</div>
+        </div>
+        <span style="font-size:22px">📺</span>
+      </div>
+    </div>
+
+  </div><!-- /home-screen -->
+
+  <!-- ════════════════════════════
+       AI 제안 Bottom Sheet
+  ════════════════════════════ -->
+  <div class="suggestion-sheet" id="suggestionSheet">
+    <div class="sheet-handle"></div>
+
+    <div class="sheet-header">
+      <div class="sheet-header-top">
+        <div class="sheet-title-row">
+          <div class="sheet-ai-badge">✨</div>
+          <div class="sheet-title">즐겨찾기 변경 제안</div>
+        </div>
+        <button class="sheet-close" onclick="closeSheet()">✕</button>
+      </div>
+      <div class="sheet-desc">최근 자주 사용하는 기능으로 구성을 업데이트해요</div>
+    </div>
+
+    <!-- 변경 요약 태그 -->
+    <div class="change-summary">
+      <div class="change-summary-title">✓ 변경 내용</div>
+      <div class="change-tags">
+        <span class="change-tag tag-add">＋ 거실 로봇청소기</span>
+        <span class="change-tag tag-add">＋ 좋은 아침</span>
+        <span class="change-tag tag-add">＋ 환기 모드</span>
+        <span class="change-tag tag-remove">－ 허브</span>
+        <span class="change-tag tag-remove">－ 안방 TV</span>
+      </div>
+    </div>
+
+    <!-- 미리보기 -->
+    <div class="sheet-preview">
+      <div class="preview-label">저장 후 홈 화면</div>
+      <div class="preview-home">
+        <!-- 3열 그리드 -->
+        <div class="preview-grid">
+          <div class="preview-card">
+            <div class="preview-card-icon">🌡</div>
+            <div class="preview-card-name">온도</div>
+            <div class="preview-card-val">24°C</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-card-icon">💧</div>
+            <div class="preview-card-name">습도</div>
+            <div class="preview-card-val">55%</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-card-icon">🚪</div>
+            <div class="preview-card-name">문과창문</div>
+            <div class="preview-card-val">닫힘</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-card-icon">❄️</div>
+            <div class="preview-card-name">에어컨</div>
+            <div class="preview-card-val">2개 켜짐</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-card-icon">🚩</div>
+            <div class="preview-card-name">커튼</div>
+            <div class="preview-card-val">1개 열림</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-card-icon">💡</div>
+            <div class="preview-card-name">조명</div>
+            <div class="preview-card-val">2개 켜짐</div>
+          </div>
+        </div>
+        <!-- 와이드 카드들 -->
+        <div class="preview-row">
+          <div class="preview-wide">
+            <span class="preview-wide-name">방송하기</span>
+            <span class="preview-wide-icon">🎙</span>
+          </div>
+          <div class="preview-wide new-card">
+            <div>
+              <div class="preview-wide-name">거실</div>
+              <div class="preview-wide-name">로봇청소기</div>
+            </div>
+            <span class="preview-wide-icon">🤖</span>
+          </div>
+        </div>
+        <div class="preview-row">
+          <div class="preview-wide new-card">
+            <span class="preview-wide-name">좋은 아침</span>
+            <span class="preview-wide-icon">☀️</span>
+          </div>
+          <div class="preview-wide">
+            <div>
+              <div class="preview-wide-name">에너지</div>
+              <div style="font-size:9px; font-weight:700; color:#1a1a2e">14,567원</div>
+            </div>
+            <span class="preview-wide-icon">⚡</span>
+          </div>
+        </div>
+        <div class="preview-row">
+          <div class="preview-wide new-card">
+            <span class="preview-wide-name">환기 모드</span>
+            <span class="preview-wide-icon">💨</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 버튼 -->
+    <div class="sheet-footer">
+      <button class="btn-cancel" onclick="closeSheet()">취소</button>
+      <button class="btn-save" id="btnSave" onclick="saveAndApply()">이대로 저장</button>
+    </div>
+  </div>
+
+  <!-- 토스트 -->
+  <div class="toast" id="toast">
+    <span class="toast-icon">✅</span>
+    즐겨찾기가 업데이트됐어요!
+  </div>
+
+  <!-- 바텀 네비 -->
+  <div class="bottom-nav">
+    <div class="nav-item active">
+      <span class="nav-icon">🏠</span>홈
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">📱</span>기기
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">🌿</span>라이프
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">▶</span>자동화
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">☰</span>메뉴
+    </div>
+  </div>
+
+</div><!-- /phone -->
+
+<script>
+  function startSuggestion() {
+    // 1. 로딩 잠깐 보여주기
+    const loading = document.getElementById('aiLoading');
+    loading.classList.add('show');
+    setTimeout(() => {
+      loading.classList.remove('show');
+      openSheet();
+    }, 1200);
+  }
+
+  function openSheet() {
+    document.getElementById('dim').classList.add('active');
+    document.getElementById('suggestionSheet').classList.add('open');
+  }
+
+  function closeSheet() {
+    document.getElementById('dim').classList.remove('active');
+    document.getElementById('suggestionSheet').classList.remove('open');
+  }
+
+  function closeBanner() {
+    const banner = document.getElementById('aiBanner');
+    banner.style.transition = 'opacity 0.3s, transform 0.3s';
+    banner.style.opacity = '0';
+    banner.style.transform = 'scale(0.95)';
+    setTimeout(() => banner.style.display = 'none', 300);
+  }
+
+  function saveAndApply() {
+    const btn = document.getElementById('btnSave');
+    btn.textContent = '저장 중...';
+    btn.classList.add('shimmer');
+    btn.disabled = true;
+
+    // 시트 닫기
+    setTimeout(() => {
+      closeSheet();
+    }, 400);
+
+    // 홈 카드 교체 애니메이션
+    setTimeout(() => {
+      applyChanges();
+    }, 600);
+
+    // 저장 완료 토스트
+    setTimeout(() => {
+      showToast();
+      closeBanner();
+    }, 1200);
+  }
+
+  function applyChanges() {
+    // c3 (허브) → 문과창문
+    const c3 = document.getElementById('c3');
+    c3.classList.add('replacing');
+    setTimeout(() => {
+      c3.innerHTML = '<div class="card-icon">🚪</div><div class="card-name">문과창문</div><div class="card-value">닫힘</div>';
+      c3.classList.remove('replacing');
+    }, 250);
+
+    // c9 (안방TV) → 환기 모드 (지연)
+    setTimeout(() => {
+      const c9 = document.getElementById('c9');
+      c9.classList.add('replacing');
+      setTimeout(() => {
+        c9.innerHTML = '<div><div class="card-name">환기 모드</div></div><span style="font-size:22px">💨</span>';
+        c9.classList.remove('replacing');
+      }, 250);
+    }, 150);
+
+    // 로봇청소기 카드 추가 (c8 에너지 옆에 새 행)
+    setTimeout(() => {
+      const row = document.getElementById('c7').parentElement;
+      // c8 에너지 왼쪽에 로봇청소기 삽입 효과
+      const c7 = document.getElementById('c7');
+      c7.classList.add('replacing');
+      setTimeout(() => {
+        // 행 재구성: 방송하기 + 로봇청소기
+        row.innerHTML = `
+          <div class="card-wide adding" id="c7">
+            <div><div class="card-name">방송하기</div></div>
+            <span style="font-size:22px">🎙</span>
+          </div>
+          <div class="card-wide adding" id="cRobot" style="border: 1.5px solid #43e97b; background:#f0fff4">
+            <div><div class="card-name" style="font-size:12px">거실 로봇청소기</div><div class="card-value">충전 중</div></div>
+            <span style="font-size:22px">🤖</span>
+          </div>`;
+      }, 200);
+    }, 300);
+
+    // 좋은 아침 추가 (새 행)
+    setTimeout(() => {
+      const c9row = document.getElementById('c9').parentElement;
+      c9row.innerHTML = `
+        <div class="card-wide adding" style="border:1.5px solid #43e97b; background:#f0fff4">
+          <div><div class="card-name">좋은 아침</div></div>
+          <span style="font-size:22px">☀️</span>
+        </div>
+        <div class="card-wide adding">
+          <div><div class="card-name">에너지</div><div class="card-value" style="font-size:13px;font-weight:700;color:#1a1a2e">14,567원</div></div>
+          <span style="font-size:22px">⚡</span>
+        </div>`;
+    }, 450);
+  }
+
+  function showToast() {
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+</script>
+</body>
+</html>
